@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.4.0b
+Added compatibility with HA 2026.6 new card suggestion feature
+
 ## V 3.3.0
 Added the ability to configure the card using the Home Assistant UI.
 
