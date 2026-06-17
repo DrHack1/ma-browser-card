@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.4.0b
+ * MA Browser Card  v3.5.0
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -35,6 +35,9 @@
  *   title: Music                    # Logo title text (default: Music)
  *   subtitle: Music Assistant       # Logo subtitle text (default: Music Assistant)
  *   icon: mdi:music                 # Any MDI icon for the logo (default: mdi:music)
+ *   tile_size: 105                  # Base artwork size in px (default: 105)
+ *                                   # Scales album/radio grid tiles, artist photos,
+ *                                   # and track-row thumbnails proportionally
  *
  *   # Behaviour
  *   click_action: play              # play (default) or enqueue
@@ -543,7 +546,7 @@ const CSS = `
 
   /* ── ALBUM / RADIO GRID ── */
   .album-grid, .radio-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 11px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--art-size, 105px), 1fr)); gap: 11px;
   }
   .album-card { cursor: pointer; position: relative; }
   .album-card.now-playing .a-art-wrap {
@@ -582,10 +585,10 @@ const CSS = `
   .a-year   { font-size: 10px; color: var(--t3); opacity: 0.7; }
 
   /* ── ARTIST GRID ── */
-  .artist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 13px; }
+  .artist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--art-size, 105px) * 0.905), 1fr)); gap: 13px; }
   .artist-card { cursor: pointer; text-align: center; }
   .ar-img {
-    width: 76px; height: 76px; border-radius: 50%; background: var(--bg2);
+    width: calc(var(--art-size, 105px) * 0.724); height: calc(var(--art-size, 105px) * 0.724); border-radius: 50%; background: var(--bg2);
     margin: 0 auto 7px; overflow: hidden; border: 2px solid var(--border);
     display: flex; align-items: center; justify-content: center;
     font-size: 26px; color: var(--t3); transition: border-color 0.14s, transform 0.14s;
@@ -604,7 +607,7 @@ const CSS = `
   .tr-num { width: 18px; font-size: 11px; color: var(--t3); text-align: center; flex-shrink: 0; }
   .track-row.playing .tr-num { color: var(--gold); }
   .tr-art {
-    width: 32px; height: 32px; border-radius: 4px; background: var(--bg3);
+    width: calc(var(--art-size, 105px) * 0.305); height: calc(var(--art-size, 105px) * 0.305); border-radius: 4px; background: var(--bg3);
     flex-shrink: 0; overflow: hidden; display: flex; align-items: center;
     justify-content: center; font-size: 15px;
   }
@@ -768,6 +771,7 @@ class MABrowserCard extends HTMLElement {
 
   _build() {
     const height       = this._config.height || 580;
+    const tileSize     = this._config.tile_size || 105;
     const theme        = this._config.theme || 'auto';
     const themeClass   = theme === 'light' ? 'theme-light' : theme === 'auto' ? 'theme-auto' : theme === 'retro' ? 'theme-retro' : '';
     const sidebarWidth = this._config.sidebar_width ? `${this._config.sidebar_width}px` : '195px';
@@ -829,7 +833,7 @@ class MABrowserCard extends HTMLElement {
       : '';
 
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
-    <div class="card ${classes}" style="--card-height:${height}px;--sidebar:${sidebarWidth}">
+    <div class="card ${classes}" style="--card-height:${height}px;--sidebar:${sidebarWidth};--art-size:${tileSize}px">
       ${outerLogo}
       <div class="sidebar">${innerContent}</div>
       <div class="main">
@@ -934,6 +938,7 @@ class MABrowserCard extends HTMLElement {
 
   _hydrateImages() {
     const els = this._scroll().querySelectorAll('[data-img]');
+    console.log('[MA Card] _hydrateImages found', els.length, 'elements');
     if (!els.length) return;
     if (!this._imgObserver) {
       this._imgObserver = new IntersectionObserver(entries => {
@@ -1265,12 +1270,17 @@ class MABrowserCard extends HTMLElement {
     let artUrl = null;
     if (typeof item.image === 'string' && item.image) {
       artUrl = item.image;
+    } else if (item.image?.proxy_id) {
+      artUrl = `${this._maUrl}/imageproxy/${item.image.proxy_id}`;
     } else if (item.image?.path) {
-      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider || '')}&size=200`;
+      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider || '')}&size=200&fmt=jpeg`;
+    } else if (item.metadata?.images?.[0]?.proxy_id) {
+      artUrl = `${this._maUrl}/imageproxy/${item.metadata.images[0].proxy_id}`;
     } else if (item.metadata?.images?.[0]?.path) {
       const img = item.metadata.images[0];
-      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider || '')}&size=200`;
+      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider || '')}&size=200&fmt=jpeg`;
     }
+    console.log('[MA Card] maItem artUrl:', artUrl, 'name:', item.name);
     const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="\U0001f4bf"` : '';
     const uri = item.uri || '', name = item.name || '', mediaType = item.media_type || 'album';
     return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="">
@@ -1394,7 +1404,11 @@ class MABrowserCard extends HTMLElement {
       if (!queueItems?.length) { qScroll.innerHTML = '<div class="state-box">Queue is empty</div>'; return; }
       qScroll.innerHTML = queueItems.map((item, i) => {
         const img = item.image;
-        const artUrl = img ? `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider)}&size=100` : null;
+        const artUrl = img
+          ? (img.proxy_id
+            ? `${this._maUrl}/imageproxy/${img.proxy_id}`
+            : `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider)}&size=100&fmt=jpeg`)
+          : null;
         const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="\u266b\uFE0E"` : '';
         const isActive = item.sort_index === currentIndex, isPast = item.sort_index < currentIndex;
         return `<div class="queue-item${isActive?' active':''}${isPast?' past':''}"><div class="qi-num">${isActive ? '\u25b6\uFE0E' : item.sort_index || i+1}</div><div class="qi-art" ${artAttrs}>\u266b\uFE0E</div><div class="qi-info"><div class="qi-name">${this._esc(item.media_item?.name || item.name || '')}</div>${item.media_item?.artists?.[0]?.name ? `<div class="qi-artist">${this._esc(item.media_item.artists[0].name)}</div>` : ''}</div><div class="qi-dur">${this._fmtDur(item.duration)}</div></div>`;
@@ -1495,7 +1509,7 @@ customElements.define('ma-browser-card', MABrowserCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'ma-browser-card',
-  name: 'MA Browser Card',
+  name: 'MA Browser Card (Dev)',
   description: 'A full-featured Music Assistant browser card — browse albums, artists, tracks, radio and playlists with artwork, search, queue view and playback controls.',
   preview: true,
   documentationURL: 'https://github.com/PMizz13/ma-browser-card',
@@ -1507,7 +1521,7 @@ window.customCards.push({
       || state?.attributes.active_queue;
     if (!isMassPlayer) return null;
     return {
-      label: 'MA Browser Card',
+      label: 'MA Browser Card (Dev)',
       config: {
         type: 'custom:ma-browser-card',
         config_entry_id: 'YOUR_MA_CONFIG_ENTRY_ID',
@@ -1674,6 +1688,7 @@ class MABrowserCardEditor extends HTMLElement {
 
       + this._sliderField('height', 'Card height', this._v('height', 580), 300, 900, 10, 'px', '')
       + this._sliderField('sidebar_width', 'Sidebar width', this._v('sidebar_width', 195), 100, 320, 5, 'px', 'Left sidebar only')
+      + this._sliderField('tile_size', 'Artwork size', this._v('tile_size', 105), 70, 500, 10, 'px', 'Scales album, artist, and track artwork together')
 
       + '<div class="toggle-row"><div><div class="toggle-label">Show title bar</div><div class="toggle-hint">Hide to save vertical space</div></div>'
       + '<label class="toggle-switch"><input type="checkbox" id="show_title"' + (st ? ' checked' : '') + ' /><span class="toggle-track"></span></label></div>'
@@ -1775,7 +1790,7 @@ class MABrowserCardEditor extends HTMLElement {
     if (showTitle) showTitle.addEventListener('change', function() { self._set('show_title', showTitle.checked); });
 
     // Layout sliders
-    ['height', 'sidebar_width'].forEach(function(id) {
+    ['height', 'sidebar_width', 'tile_size'].forEach(function(id) {
       var slider = sr.getElementById(id);
       var numBox = sr.getElementById(id + '_num');
       if (!slider || !numBox) return;
