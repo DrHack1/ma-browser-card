@@ -1686,7 +1686,7 @@ class MABrowserCardEditor extends HTMLElement {
       + '<option value="top"' + (pp === 'top' ? ' selected' : '') + '>Top</option>'
       + '</select><div class="hint">In top sidebar mode: bottom pins player to card bottom</div></div>'
 
-      + this._sliderField('height', 'Card height', this._v('height', 580), 300, 900, 10, 'px', '')
+      + this._sliderField('height', 'Card height', this._v('height', 580), 300, 2500, 10, 'px', '')
       + this._sliderField('sidebar_width', 'Sidebar width', this._v('sidebar_width', 195), 100, 320, 5, 'px', 'Left sidebar only')
       + this._sliderField('tile_size', 'Artwork size', this._v('tile_size', 105), 70, 500, 10, 'px', 'Scales album, artist, and track artwork together')
 
