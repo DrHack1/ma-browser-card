@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.5.1
+Increased the maximum limit for the UI slider controlling card height to 2500px
+
 ## V 3.5.0
 New Feature
 You can now resize artwork tiles.
