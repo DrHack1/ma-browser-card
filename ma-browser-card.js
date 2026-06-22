@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.5.1
+ * MA Browser Card  v3.5.2
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -924,21 +924,19 @@ class MABrowserCard extends HTMLElement {
   async _loadImgInto(url, el, ph) {
     if (!url) { el.innerHTML = ph; return; }
     if (this._imgCache[url]) { if (el.isConnected) el.innerHTML = `<img src="${this._imgCache[url]}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`; return; }
-    try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(resp.status);
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      this._imgCache[url] = blobUrl;
-      if (el.isConnected) el.innerHTML = `<img src="${blobUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`;
-    } catch {
-      if (el.isConnected) { const img = document.createElement('img'); img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:inherit;'; img.onerror = () => { if (el.isConnected) el.innerHTML = ph; }; img.src = url; el.innerHTML = ''; el.appendChild(img); }
+    if (el.isConnected) {
+      const img = document.createElement('img');
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:inherit;';
+      img.onload = () => { this._imgCache[url] = url; };
+      img.onerror = () => { if (el.isConnected) el.innerHTML = ph; };
+      img.src = url;
+      el.innerHTML = '';
+      el.appendChild(img);
     }
   }
 
   _hydrateImages() {
     const els = this._scroll().querySelectorAll('[data-img]');
-    console.log('[MA Card] _hydrateImages found', els.length, 'elements');
     if (!els.length) return;
     if (!this._imgObserver) {
       this._imgObserver = new IntersectionObserver(entries => {
@@ -995,34 +993,6 @@ class MABrowserCard extends HTMLElement {
 
   // ── MA WEBSOCKET ──────────────────────────────────────────────
 
-  // localStorage cache — survives card rebuild and theme changes (10 min TTL)
-  _lsKey(key) {
-    // Namespace by config_entry_id + home_sections limits
-    // so cards with different limits don't share the same cache entry
-    const id = this._config.config_entry_id || 'default';
-    const sec = this._config.home_sections || {};
-    const limitsStr = [
-      sec.recently_played ?? 20,
-      sec.recently_added  ?? 20,
-    ].join('_');
-    return `ma_card_${id}_${limitsStr}_${key}`;
-  }
-
-  _lsGet(key) {
-    try {
-      const raw = localStorage.getItem(this._lsKey(key));
-      if (!raw) return null;
-      const { ts, data } = JSON.parse(raw);
-      if (Date.now() - ts < 600000) return data;
-      localStorage.removeItem(this._lsKey(key));
-    } catch {}
-    return null;
-  }
-
-  _lsSet(key, data) {
-    try { localStorage.setItem(this._lsKey(key), JSON.stringify({ ts: Date.now(), data })); } catch {}
-  }
-
   // Wait up to 5s for WS to authenticate
   async _waitForWS() {
     if (this._wsReady) return true;
@@ -1063,48 +1033,20 @@ class MABrowserCard extends HTMLElement {
 
   async _fetchRecentlyAdded(limit = 20) {
     if (!this._maToken) return [];
-    const cached = this._lsGet('recently_added');
-    if (cached) {
-      // Refresh in background without blocking render
-      this._waitForWS().then(ready => {
-        if (!ready) return;
-        this._wsSend('music/albums/library_items', { order_by: 'timestamp_added_desc', limit })
-          .then(result => { const items = result?.items ?? (Array.isArray(result) ? result : []); this._lsSet('recently_added', items); })
-          .catch(() => {});
-      });
-      return cached;
-    }
     if (!await this._waitForWS()) return [];
     try {
       const result = await this._wsSend('music/albums/library_items', { order_by: 'timestamp_added_desc', limit });
-      const items = result?.items ?? (Array.isArray(result) ? result : []);
-      this._lsSet('recently_added', items);
-      return items;
+      return result?.items ?? (Array.isArray(result) ? result : []);
     } catch(e) { console.warn('[MA Card] recently_added failed:', e.message); return []; }
   }
 
   async _fetchRecentlyPlayed(limit = 20) {
     if (!this._maToken) return [];
-    const cached = this._lsGet('recently_played');
-    if (cached) {
-      this._waitForWS().then(ready => {
-        if (!ready) return;
-        this._wsSend('music/recently_played_items', { limit, media_types: ['album'] })
-          .then(items => {
-            const seen = new Set();
-            const filtered = (Array.isArray(items) ? items : []).filter(i => { if (seen.has(i.name)) return false; seen.add(i.name); return true; });
-            this._lsSet('recently_played', filtered);
-          }).catch(() => {});
-      });
-      return cached;
-    }
     if (!await this._waitForWS()) return [];
     try {
       const items = await this._wsSend('music/recently_played_items', { limit, media_types: ['album'] });
       const seen = new Set();
-      const filtered = (Array.isArray(items) ? items : []).filter(i => { if (seen.has(i.name)) return false; seen.add(i.name); return true; });
-      this._lsSet('recently_played', filtered);
-      return filtered;
+      return (Array.isArray(items) ? items : []).filter(i => { if (seen.has(i.name)) return false; seen.add(i.name); return true; });
     } catch(e) { console.warn('[MA Card] recently_played failed:', e.message); return []; }
   }
 
@@ -1273,14 +1215,13 @@ class MABrowserCard extends HTMLElement {
     } else if (item.image?.proxy_id) {
       artUrl = `${this._maUrl}/imageproxy/${item.image.proxy_id}`;
     } else if (item.image?.path) {
-      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider || '')}&size=200&fmt=jpeg`;
+      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider || '')}&size=256&fmt=jpeg`;
     } else if (item.metadata?.images?.[0]?.proxy_id) {
       artUrl = `${this._maUrl}/imageproxy/${item.metadata.images[0].proxy_id}`;
     } else if (item.metadata?.images?.[0]?.path) {
       const img = item.metadata.images[0];
-      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider || '')}&size=200&fmt=jpeg`;
+      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider || '')}&size=256&fmt=jpeg`;
     }
-    console.log('[MA Card] maItem artUrl:', artUrl, 'name:', item.name);
     const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="\U0001f4bf"` : '';
     const uri = item.uri || '', name = item.name || '', mediaType = item.media_type || 'album';
     return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="">
@@ -1407,7 +1348,7 @@ class MABrowserCard extends HTMLElement {
         const artUrl = img
           ? (img.proxy_id
             ? `${this._maUrl}/imageproxy/${img.proxy_id}`
-            : `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider)}&size=100&fmt=jpeg`)
+            : `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider)}&size=80&fmt=jpeg`)
           : null;
         const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="\u266b\uFE0E"` : '';
         const isActive = item.sort_index === currentIndex, isPast = item.sort_index < currentIndex;
@@ -1493,7 +1434,6 @@ class MABrowserCard extends HTMLElement {
     clearInterval(this._pollTimer); clearInterval(this._progressTimer); clearTimeout(this._searchTimer);
     if (this._imgObserver) { this._imgObserver.disconnect(); this._imgObserver = null; }
     if (this._ws) { this._ws.onclose = null; this._ws.close(); this._ws = null; }
-    Object.values(this._imgCache).forEach(url => URL.revokeObjectURL(url));
     this._imgCache = {}; this._libCache = {};
     document.removeEventListener('click', this._boundDismissCtx);
   }
@@ -1509,7 +1449,7 @@ customElements.define('ma-browser-card', MABrowserCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'ma-browser-card',
-  name: 'MA Browser Card (Dev)',
+  name: 'MA Browser Card',
   description: 'A full-featured Music Assistant browser card — browse albums, artists, tracks, radio and playlists with artwork, search, queue view and playback controls.',
   preview: true,
   documentationURL: 'https://github.com/PMizz13/ma-browser-card',
@@ -1521,7 +1461,7 @@ window.customCards.push({
       || state?.attributes.active_queue;
     if (!isMassPlayer) return null;
     return {
-      label: 'MA Browser Card (Dev)',
+      label: 'MA Browser Card',
       config: {
         type: 'custom:ma-browser-card',
         config_entry_id: 'YOUR_MA_CONFIG_ENTRY_ID',
@@ -1686,9 +1626,9 @@ class MABrowserCardEditor extends HTMLElement {
       + '<option value="top"' + (pp === 'top' ? ' selected' : '') + '>Top</option>'
       + '</select><div class="hint">In top sidebar mode: bottom pins player to card bottom</div></div>'
 
-      + this._sliderField('height', 'Card height', this._v('height', 580), 300, 2500, 10, 'px', '')
+      + this._sliderField('height', 'Card height', this._v('height', 580), 300, 900, 10, 'px', '')
       + this._sliderField('sidebar_width', 'Sidebar width', this._v('sidebar_width', 195), 100, 320, 5, 'px', 'Left sidebar only')
-      + this._sliderField('tile_size', 'Artwork size', this._v('tile_size', 105), 70, 500, 10, 'px', 'Scales album, artist, and track artwork together')
+      + this._sliderField('tile_size', 'Artwork size', this._v('tile_size', 105), 70, 220, 5, 'px', 'Scales album, artist, and track artwork together')
 
       + '<div class="toggle-row"><div><div class="toggle-label">Show title bar</div><div class="toggle-hint">Hide to save vertical space</div></div>'
       + '<label class="toggle-switch"><input type="checkbox" id="show_title"' + (st ? ' checked' : '') + ' /><span class="toggle-track"></span></label></div>'
