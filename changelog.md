@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.5.2
+Fixed a bug in the artwork fetch
+
 ## V 3.5.1
 Increased the maximum limit for the UI slider controlling card height to 2500px
 
