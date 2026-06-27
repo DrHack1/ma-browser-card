@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.5.3
+ * MA Browser Card  v3.5.4
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  * Fork: https://github.com/DrHack1/ma-browser-card (adds favourites home sections)
@@ -579,6 +579,20 @@ const CSS = `
     color: #111; font-size: 13px; transform: scale(0.85); transition: transform 0.14s;
   }
   .album-card:hover .play-circle { transform: scale(1); }
+  /* instant tap-to-play feedback: spinner until playback actually starts */
+  .album-card.loading .a-overlay { opacity: 1; }
+  .album-card.loading .play-circle {
+    transform: scale(1); background: transparent; color: transparent;
+    border: 3px solid rgba(255,255,255,0.3); border-top-color: var(--gold);
+    animation: spin 0.7s linear infinite;
+  }
+  .track-row.loading { position: relative; opacity: 0.65; }
+  .track-row.loading::after {
+    content: ''; position: absolute; right: 12px; top: 50%; margin-top: -8px;
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--gold);
+    animation: spin 0.7s linear infinite;
+  }
   .playing-badge {
     position: absolute; bottom: 5px; left: 5px; z-index: 3;
     background: var(--gold); border-radius: 4px; padding: 2px 5px;
@@ -1287,15 +1301,33 @@ class MABrowserCard extends HTMLElement {
   _handleClick(e) {
     this._dismissCtx();
     const albumEl = e.target.closest('.album-card');
-    if (albumEl && albumEl.dataset.uri) { const action = this._config.click_action || 'play'; this._playMedia(albumEl.dataset.uri, albumEl.dataset.type, action === 'enqueue' ? 'add' : 'play'); return; }
+    if (albumEl && albumEl.dataset.uri) { const action = this._config.click_action || 'play'; this._setPlayLoading(albumEl); this._playMedia(albumEl.dataset.uri, albumEl.dataset.type, action === 'enqueue' ? 'add' : 'play').catch(() => this._clearPlayLoading()); return; }
     const trackEl = e.target.closest('.track-row');
-    if (trackEl && trackEl.dataset.uri) { this._playMedia(trackEl.dataset.uri, 'track'); return; }
+    if (trackEl && trackEl.dataset.uri) { this._setPlayLoading(trackEl); this._playMedia(trackEl.dataset.uri, 'track').catch(() => this._clearPlayLoading()); return; }
     const artistEl = e.target.closest('.artist-card');
     if (artistEl) { this._renderArtistDetail(artistEl.dataset.name, artistEl.dataset.art); return; }
     const secBtn = e.target.closest('.sec-btn');
     if (secBtn) { this._playAll(JSON.parse(secBtn.dataset.items || '[]'), secBtn.dataset.action === 'shuffle-all'); return; }
     const backEl = e.target.closest('[data-action="back"]');
     if (backEl) { this._renderView(this._view); return; }
+  }
+
+  // Instant tap feedback: spin the tapped tile until playback actually starts
+  // (cleared in _updateNowPlaying when the now-playing title changes), with a
+  // safety timeout in case the player never reports back.
+  _setPlayLoading(el) {
+    this._clearPlayLoading();
+    if (!el || !this._selectedPlayer) return;
+    el.classList.add('loading');
+    this._loadingEl = el;
+    const st = this._hass && this._hass.states[this._selectedPlayer];
+    this._loadingTitle = st ? st.attributes.media_title : null;
+    this._loadingTimer = setTimeout(() => this._clearPlayLoading(), 15000);
+  }
+  _clearPlayLoading() {
+    clearTimeout(this._loadingTimer);
+    if (this._loadingEl) { this._loadingEl.classList.remove('loading'); this._loadingEl = null; }
+    this._loadingTitle = undefined;
   }
 
   _handleCtx(e) {
@@ -1422,6 +1454,7 @@ class MABrowserCard extends HTMLElement {
   _updateNowPlaying() {
     if (!this._selectedPlayer || !this._hass) return;
     const state = this._hass.states[this._selectedPlayer]; if (!state) return;
+    if (this._loadingEl && state.state === 'playing' && state.attributes.media_title && state.attributes.media_title !== this._loadingTitle) this._clearPlayLoading();
     const npKey = `${state.state}:${state.attributes.media_title}:${Math.floor((state.attributes.media_position||0)/5)}:${state.attributes.volume_level}:${state.attributes.shuffle}:${state.attributes.repeat}`;
     if (npKey === this._lastNpKey) return; this._lastNpKey = npKey;
     const isPlaying = state.state === 'playing';

@@ -1,5 +1,12 @@
 # MA Browser Card
 
+## V 3.5.4 (fork)
+Improvement (fork: DrHack1)
+Instant tap-to-play feedback. Tapping an album/playlist/track now immediately
+shows a loading spinner on that tile (covering the lag before audio starts),
+cleared automatically once the player reports the new track playing, with a
+15s safety timeout.
+
 ## V 3.5.3 (fork)
 New Feature (fork: DrHack1)
 Favourites can now appear on the home screen. New `home_sections` keys
