@@ -1,5 +1,13 @@
 # MA Browser Card
 
+## V 3.5.3 (fork)
+New Feature (fork: DrHack1)
+Favourites can now appear on the home screen. New `home_sections` keys
+(all default 0 = off, shown above the existing sections):
+`favorite_playlists`, `favorite_albums`, `favorite_artists`, `favorite_tracks`.
+Reuses the existing favourites library fetch (`get_library` with `favorite: true`)
+and tap-to-play grids.
+
 ## V 3.5.2
 Fixed a bug in the artwork fetch
 
