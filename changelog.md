@@ -1,5 +1,11 @@
 # MA Browser Card
 
+## V 3.5.7 (fork)
+Fix (fork: DrHack1)
+Tap-to-play feedback is now a clear "Loading…" toast at the bottom of the card
+(plus the tile spinner), so feedback is guaranteed visible regardless of which
+item type was tapped.
+
 ## V 3.5.6 (fork)
 Fixes/improvements (fork: DrHack1)
 - `height` now accepts a CSS length string (e.g. "82vh") so the card can fill a

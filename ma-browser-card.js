@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.5.6
+ * MA Browser Card  v3.5.7
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  * Fork: https://github.com/DrHack1/ma-browser-card (adds favourites home sections)
@@ -606,6 +606,20 @@ const CSS = `
     border: 3px solid rgba(255,255,255,0.3); border-top-color: var(--gold);
     animation: spin 0.7s linear infinite; z-index: 4;
   }
+  /* guaranteed-visible tap-to-play feedback: a toast at the bottom of the card */
+  .play-toast {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%) translateY(12px);
+    display: flex; align-items: center; gap: 10px; z-index: 60;
+    background: rgba(18,18,22,0.96); color: #fff; padding: 10px 18px; border-radius: 24px;
+    font-size: 13px; font-weight: 600; box-shadow: 0 6px 22px rgba(0,0,0,0.55);
+    opacity: 0; pointer-events: none; transition: opacity 0.16s, transform 0.16s;
+  }
+  .play-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .pt-spin {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3); border-top-color: var(--gold);
+    animation: spin 0.7s linear infinite;
+  }
   .playing-badge {
     position: absolute; bottom: 5px; left: 5px; z-index: 3;
     background: var(--gold); border-radius: 4px; padding: 2px 5px;
@@ -886,6 +900,7 @@ class MABrowserCard extends HTMLElement {
         </div>
       </div>
       ${bottomPlayer}
+      <div class="play-toast" id="playToast"><span class="pt-spin"></span><span>Loading…</span></div>
     </div>`;
 
     this.shadowRoot.querySelectorAll('.nav-btn').forEach(btn =>
@@ -1335,18 +1350,18 @@ class MABrowserCard extends HTMLElement {
   // safety timeout in case the player never reports back.
   _setPlayLoading(el) {
     this._clearPlayLoading(true);
-    if (!el) return;
-    el.classList.add('loading');
-    this._loadingEl = el;
+    this._loadingActive = true;
     this._loadingShownAt = Date.now();
+    const toast = this._$('playToast'); if (toast) toast.classList.add('show');
+    if (el) { el.classList.add('loading'); this._loadingEl = el; }
     const st = this._selectedPlayer && this._hass && this._hass.states[this._selectedPlayer];
     this._loadingTitle = st ? st.attributes.media_title : null;
     this._loadingTimer = setTimeout(() => this._clearPlayLoading(true), 15000);
   }
-  // Keep the spinner visible for at least 700ms so quick state updates can't
-  // make it flash-and-vanish before it's seen. Pass immediate=true to skip.
+  // Keep feedback visible for at least 700ms so quick state updates can't make
+  // it flash-and-vanish before it's seen. Pass immediate=true to skip.
   _clearPlayLoading(immediate) {
-    if (!this._loadingEl) { clearTimeout(this._loadingTimer); return; }
+    if (!this._loadingActive) { clearTimeout(this._loadingTimer); return; }
     const elapsed = Date.now() - (this._loadingShownAt || 0);
     if (!immediate && elapsed < 700) {
       clearTimeout(this._loadingTimer);
@@ -1354,8 +1369,9 @@ class MABrowserCard extends HTMLElement {
       return;
     }
     clearTimeout(this._loadingTimer);
-    this._loadingEl.classList.remove('loading');
-    this._loadingEl = null;
+    const toast = this._$('playToast'); if (toast) toast.classList.remove('show');
+    if (this._loadingEl) { this._loadingEl.classList.remove('loading'); this._loadingEl = null; }
+    this._loadingActive = false;
     this._loadingTitle = undefined;
   }
 
@@ -1483,7 +1499,7 @@ class MABrowserCard extends HTMLElement {
   _updateNowPlaying() {
     if (!this._selectedPlayer || !this._hass) return;
     const state = this._hass.states[this._selectedPlayer]; if (!state) return;
-    if (this._loadingEl && state.state === 'playing' && state.attributes.media_title && state.attributes.media_title !== this._loadingTitle) this._clearPlayLoading();
+    if (this._loadingActive && state.state === 'playing' && state.attributes.media_title && state.attributes.media_title !== this._loadingTitle) this._clearPlayLoading();
     const npKey = `${state.state}:${state.attributes.media_title}:${Math.floor((state.attributes.media_position||0)/5)}:${state.attributes.volume_level}:${state.attributes.shuffle}:${state.attributes.repeat}`;
     if (npKey === this._lastNpKey) return; this._lastNpKey = npKey;
     const isPlaying = state.state === 'playing';
