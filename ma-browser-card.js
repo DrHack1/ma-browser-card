@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.5.5
+ * MA Browser Card  v3.5.6
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  * Fork: https://github.com/DrHack1/ma-browser-card (adds favourites home sections)
@@ -24,7 +24,9 @@
  *                                   # Enables the Recently Played section on home screen
  *
  *   # Layout
- *   height: 580                     # Card height in pixels (default: 580)
+ *   height: 580                     # Card height: a number = pixels (default 580),
+ *                                   # or a CSS length string like "82vh" to fill a
+ *                                   # responsive container such as a popup
  *   sidebar_position: left          # left (default) or top (horizontal nav bar)
  *   sidebar_width: 195              # Sidebar width in px, left sidebar only (default: 195)
  *   player_position: bottom         # bottom (default) or top
@@ -590,18 +592,19 @@ const CSS = `
   }
   .album-card:hover .play-circle { transform: scale(1); }
   /* instant tap-to-play feedback: spinner until playback actually starts */
-  .album-card.loading .a-overlay { opacity: 1; }
+  .album-card.loading .a-overlay { opacity: 1 !important; background: rgba(0,0,0,0.6); }
   .album-card.loading .play-circle {
-    transform: scale(1); background: transparent; color: transparent;
-    border: 3px solid rgba(255,255,255,0.3); border-top-color: var(--gold);
+    transform: none !important; background: transparent; color: transparent;
+    width: 34px; height: 34px;
+    border: 4px solid rgba(255,255,255,0.35); border-top-color: var(--gold);
     animation: spin 0.7s linear infinite;
   }
-  .track-row.loading { position: relative; opacity: 0.65; }
+  .track-row.loading { position: relative; opacity: 0.6; }
   .track-row.loading::after {
-    content: ''; position: absolute; right: 12px; top: 50%; margin-top: -8px;
-    width: 16px; height: 16px; border-radius: 50%;
-    border: 2px solid var(--border); border-top-color: var(--gold);
-    animation: spin 0.7s linear infinite;
+    content: ''; position: absolute; right: 12px; top: 50%; margin-top: -9px;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.3); border-top-color: var(--gold);
+    animation: spin 0.7s linear infinite; z-index: 4;
   }
   .playing-badge {
     position: absolute; bottom: 5px; left: 5px; z-index: 3;
@@ -799,7 +802,10 @@ class MABrowserCard extends HTMLElement {
   }
 
   _build() {
-    const height       = this._config.height || 580;
+    // height may be a number (px) or a CSS length string (e.g. "82vh") so the
+    // card can fill a responsive container such as a popup.
+    const heightCfg    = this._config.height ?? 580;
+    const height       = typeof heightCfg === 'number' ? `${heightCfg}px` : String(heightCfg);
     const tileSize     = this._config.tile_size || 105;
     const theme        = this._config.theme || 'auto';
     const themeClass   = theme === 'light' ? 'theme-light' : theme === 'auto' ? 'theme-auto' : theme === 'retro' ? 'theme-retro' : '';
@@ -864,7 +870,7 @@ class MABrowserCard extends HTMLElement {
       : '';
 
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
-    <div class="card ${classes}" style="--card-height:${height}px;--sidebar:${sidebarWidth};--art-size:${tileSize}px">
+    <div class="card ${classes}" style="--card-height:${height};--sidebar:${sidebarWidth};--art-size:${tileSize}px">
       ${outerLogo}
       <div class="sidebar">${innerContent}</div>
       <div class="main">
@@ -1328,17 +1334,28 @@ class MABrowserCard extends HTMLElement {
   // (cleared in _updateNowPlaying when the now-playing title changes), with a
   // safety timeout in case the player never reports back.
   _setPlayLoading(el) {
-    this._clearPlayLoading();
-    if (!el || !this._selectedPlayer) return;
+    this._clearPlayLoading(true);
+    if (!el) return;
     el.classList.add('loading');
     this._loadingEl = el;
-    const st = this._hass && this._hass.states[this._selectedPlayer];
+    this._loadingShownAt = Date.now();
+    const st = this._selectedPlayer && this._hass && this._hass.states[this._selectedPlayer];
     this._loadingTitle = st ? st.attributes.media_title : null;
-    this._loadingTimer = setTimeout(() => this._clearPlayLoading(), 15000);
+    this._loadingTimer = setTimeout(() => this._clearPlayLoading(true), 15000);
   }
-  _clearPlayLoading() {
+  // Keep the spinner visible for at least 700ms so quick state updates can't
+  // make it flash-and-vanish before it's seen. Pass immediate=true to skip.
+  _clearPlayLoading(immediate) {
+    if (!this._loadingEl) { clearTimeout(this._loadingTimer); return; }
+    const elapsed = Date.now() - (this._loadingShownAt || 0);
+    if (!immediate && elapsed < 700) {
+      clearTimeout(this._loadingTimer);
+      this._loadingTimer = setTimeout(() => this._clearPlayLoading(true), 700 - elapsed);
+      return;
+    }
     clearTimeout(this._loadingTimer);
-    if (this._loadingEl) { this._loadingEl.classList.remove('loading'); this._loadingEl = null; }
+    this._loadingEl.classList.remove('loading');
+    this._loadingEl = null;
     this._loadingTitle = undefined;
   }
 

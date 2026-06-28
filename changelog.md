@@ -1,5 +1,12 @@
 # MA Browser Card
 
+## V 3.5.6 (fork)
+Fixes/improvements (fork: DrHack1)
+- `height` now accepts a CSS length string (e.g. "82vh") so the card can fill a
+  responsive container such as a popup, instead of only fixed pixels.
+- Tap-to-play loading spinner is now clearly visible (fixed a transform conflict
+  that hid it) and stays up for at least 700ms so it can't flash-and-vanish.
+
 ## V 3.5.5 (fork)
 New options (fork: DrHack1)
 `hide_sidebar` and `hide_player` (both default false). Hide the left sidebar
