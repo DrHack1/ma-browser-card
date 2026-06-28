@@ -1,5 +1,12 @@
 # MA Browser Card
 
+## V 3.5.5 (fork)
+New options (fork: DrHack1)
+`hide_sidebar` and `hide_player` (both default false). Hide the left sidebar
+(logo + nav menus) and/or the bottom player bar, leaving a full-width search +
+content view — handy for embedding the card in a compact popup. Hidden elements
+stay in the DOM so player selection and playback still work.
+
 ## V 3.5.4 (fork)
 Improvement (fork: DrHack1)
 Instant tap-to-play feedback. Tapping an album/playlist/track now immediately

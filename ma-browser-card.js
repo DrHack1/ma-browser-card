@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.5.4
+ * MA Browser Card  v3.5.5
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  * Fork: https://github.com/DrHack1/ma-browser-card (adds favourites home sections)
@@ -30,6 +30,10 @@
  *   player_position: bottom         # bottom (default) or top
  *                                   # top sidebar + bottom player = player pinned to card bottom
  *   show_title: true                # Show/hide the logo title bar (default: true)
+ *   hide_sidebar: false             # Hide the left sidebar (logo + nav menus). Search +
+ *                                   # content remain full-width. Good for a compact popup.
+ *   hide_player: false              # Hide the bottom player bar (now-playing + controls).
+ *                                   # The configured/first player is still used for playback.
  *
  *   # Appearance
  *   theme: auto                     # auto (default, follows HA theme), dark, light, or retro
@@ -92,6 +96,12 @@ const CSS = `
     height: var(--card-height, 580px);
     position: relative;
   }
+  /* minimal/popup chrome: hide the left sidebar (logo + nav menus) and/or the
+     player bar. Elements stay in the DOM (display:none) so player selection and
+     controls still function. */
+  .card.hide-sidebar > .sidebar,
+  .card.hide-sidebar > .logo { display: none !important; }
+  .card.hide-player .player-bar { display: none !important; }
   .card.theme-light {
     --gold: var(--primary-color, #e5a00d);
     --gold-bg: color-mix(in srgb, var(--primary-color, #e5a00d) 12%, transparent);
@@ -802,7 +812,9 @@ class MABrowserCard extends HTMLElement {
     const cardIcon     = this._config.icon     || 'mdi:music';
     if (this._config.columns) this.style.gridColumn = `span ${this._config.columns}`;
 
-    const classes = [themeClass, sidebarTop ? 'sidebar-top' : 'sidebar-left', playerTop ? 'player-top' : 'player-bottom'].filter(Boolean).join(' ');
+    const hideSidebar = this._config.hide_sidebar === true;
+    const hidePlayer  = this._config.hide_player === true;
+    const classes = [themeClass, sidebarTop ? 'sidebar-top' : 'sidebar-left', playerTop ? 'player-top' : 'player-bottom', hideSidebar ? 'hide-sidebar' : '', hidePlayer ? 'hide-player' : ''].filter(Boolean).join(' ');
 
     const playerBarHtml = `<div class="player-bar">
         <div class="np-row" id="npRow">
