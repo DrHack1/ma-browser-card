@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.5.7
+ * MA Browser Card  v3.5.8
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  * Fork: https://github.com/DrHack1/ma-browser-card (adds favourites home sections)
@@ -606,18 +606,19 @@ const CSS = `
     border: 3px solid rgba(255,255,255,0.3); border-top-color: var(--gold);
     animation: spin 0.7s linear infinite; z-index: 4;
   }
-  /* guaranteed-visible tap-to-play feedback: a toast at the bottom of the card */
+  /* guaranteed-visible tap-to-play feedback: a toast near the top of the card
+     (top avoids being clipped when the card slightly overflows a popup dialog) */
   .play-toast {
-    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%) translateY(12px);
-    display: flex; align-items: center; gap: 10px; z-index: 60;
-    background: rgba(18,18,22,0.96); color: #fff; padding: 10px 18px; border-radius: 24px;
-    font-size: 13px; font-weight: 600; box-shadow: 0 6px 22px rgba(0,0,0,0.55);
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%) translateY(-12px);
+    display: flex; align-items: center; gap: 10px; z-index: 1000;
+    background: var(--gold); color: #111; padding: 11px 20px; border-radius: 24px;
+    font-size: 14px; font-weight: 700; box-shadow: 0 6px 22px rgba(0,0,0,0.55);
     opacity: 0; pointer-events: none; transition: opacity 0.16s, transform 0.16s;
   }
   .play-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .pt-spin {
     width: 16px; height: 16px; border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.3); border-top-color: var(--gold);
+    border: 2px solid rgba(0,0,0,0.25); border-top-color: #111;
     animation: spin 0.7s linear infinite;
   }
   .playing-badge {
@@ -1037,6 +1038,7 @@ class MABrowserCard extends HTMLElement {
 
   async _playMedia(uri, mediaType, enqueue = 'play') {
     if (!this._selectedPlayer) { alert('Select a player first'); return; }
+    if (!this._loadingActive) this._setPlayLoading(null);   // ensure feedback for every play path
     const isShuffle = enqueue === 'shuffle';
     if (isShuffle) await this._hass.callService('media_player', 'shuffle_set', { entity_id: this._selectedPlayer, shuffle: true });
     await this._hass.callService('music_assistant', 'play_media', { entity_id: this._selectedPlayer, media_id: uri, media_type: mediaType || 'album', enqueue: isShuffle ? 'play' : enqueue });

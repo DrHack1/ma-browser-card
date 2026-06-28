@@ -1,5 +1,11 @@
 # MA Browser Card
 
+## V 3.5.8 (fork)
+Fix (fork: DrHack1)
+Loading toast moved to the top of the card (the bottom could be clipped when the
+card overflows a popup dialog) and is now also triggered from _playMedia, so it
+shows for every play path. High-contrast gold pill.
+
 ## V 3.5.7 (fork)
 Fix (fork: DrHack1)
 Tap-to-play feedback is now a clear "Loading…" toast at the bottom of the card
